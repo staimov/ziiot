@@ -1,0 +1,186 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zif-bp-calculate-operations-specification-worker
+  namespace: ziiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zif-bp-calculate-operations-specification-worker
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/name: zif-bp-calculate-operations-specification-worker
+        app.kubernetes.io/version: 2.0.1
+        helm.sh/chart: zif-bp-calculate-operations-specification-worker-1.15.0
+        zyfra.com/module: bp-workers
+        zyfra.com/product: ziiot
+        zyfra.com/type: java
+    spec:
+      volumes:
+        - name: ca-bundle
+          configMap:
+            name: java-ca-bundle
+            defaultMode: 420
+      initContainers:
+        - name: startup-guardian
+          image: docker-group.idp.yc.ziiot.ru/infra/zifctl:<Указать версию платформы>
+          command:
+            - /usr/local/bin/ansible-playbook
+            - /platform/scripts/startup-guardian/startup-check-playbook.yaml
+          envFrom:
+            - configMapRef:
+                name: zif-global-config
+            - configMapRef:
+                name: zif-service-links
+          env:
+            - name: ANSIBLE_LOCAL_TEMP
+              value: /var/tmp
+            - name: ANSIBLE_REMOTE_TEMP
+              value: /var/tmp
+            - name: CHECK_KEYCLOAK_SERVER
+              value: 'true'
+            - name: CHECK_KEYCLOAK_TOKEN
+              value: 'true'
+            - name: AUTH_CLIENT_ID
+              value: zif-bp-calculate-operations-specification-worker
+            - name: AUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: zif-bp-module-secrets
+                  key: zif-bp-calculate-operations-specification-worker-keycloak
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 40m
+              memory: 128Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+      containers:
+        - name: zif-bp-calculate-specification-worker
+          image: >-
+            docker-group.idp.yc.ziiot.ru/digital-plant/zif-bp-calculate-specification-worker:2.0.1
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: zif-global-config
+                optional: false
+            - configMapRef:
+                name: zif-bp-module-config
+                optional: true
+            - configMapRef:
+                name: zif-service-links
+                optional: false
+          env:
+            - name: DEBUG_MODE_ENABLED
+              value: 'false'
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: http://+:5000
+            - name: AUDIT_ENABLE
+              value: 'true'
+            - name: AUTH_CLIENT_ID
+              value: zif-bp-calculate-operations-specification-worker
+            - name: AUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: zif-bp-module-secrets
+                  key: zif-bp-calculate-operations-specification-worker-keycloak
+            - name: CONTEXT_PATH
+              value: /zif-bp-calculate-operations-specification-worker
+            - name: JAEGER_SERVICE_NAME
+              value: ziiot__zif-bp-calculate-operations-specification-worker
+            - name: KAFKA_CONSUMER_GROUP
+              value: ziiot-zif-bp-calculate-operations-specification-worker
+            - name: KAFKA_GROUP_ID
+              value: ziiot-zif-bp-calculate-operations-specification-worker
+            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+              value: 'true'
+            - name: LOG_CONSOLE_LOGLEVEL
+              value: Information
+            - name: LOG_CONSOLE_STRUCTURED
+              value: 'true'
+            - name: LOG_LEVEL
+              value: Information
+            - name: PROBES_ENABLED
+              value: 'true'
+            - name: REST_ZIF_SM_OPERATIONDEFINITION_URL
+              value: http://zif-sm-operationdefinition/
+            - name: REST_ZIF_WORKFLOW_URL
+              value: http://zif-workflow/zif-workflow
+            - name: USE_OPERATIONS_WORKER
+              value: 'true'
+          resources:
+            limits:
+              cpu: 500m
+              memory: 768Mi
+            requests:
+              cpu: 80m
+              memory: 256Mi
+          volumeMounts:
+            - name: ca-bundle
+              mountPath: /opt/java/openjdk/lib/security/cacerts
+              subPath: cacerts
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      imagePullSecrets:
+        - name: zif-registry-pull-secret-v2
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - zif-bp-calculate-operations-specification-worker
+                topologyKey: kubernetes.io/hostname
+      schedulerName: default-scheduler
+      enableServiceLinks: false
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
