@@ -26,7 +26,7 @@ spec:
             defaultMode: 420
       initContainers:
         - name: startup-guardian
-          image: docker-group.idp.yc.ziiot.ru/infra/zifctl:2.14.1
+          image: registry.dp.zyfra.com/infra/zifctl:2.14.1
           command:
             - /usr/local/bin/ansible-playbook
             - /platform/scripts/startup-guardian/startup-check-playbook.yaml
@@ -67,7 +67,7 @@ spec:
       containers:
         - name: zif-bp-calculate-specification-worker
           image: >-
-            docker-group.idp.yc.ziiot.ru/digital-plant/zif-bp-calculate-specification-worker:2.0.1
+            registry.dp.zyfra.com/digital-plant/zif-bp-calculate-specification-worker:2.0.1
           ports:
             - name: http
               containerPort: 8080
